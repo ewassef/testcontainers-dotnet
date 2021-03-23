@@ -10,7 +10,7 @@ namespace TestContainers.Tests.ContainerTests
     public class GenericContainerFixture : IAsyncLifetime
     {
         public ContainerInspectResponse ContainerInfo => _container.ContainerInspectResponse;
-        readonly Container _container;
+        private readonly Container _container;
 
         public GenericContainerFixture() => _container = new GenericContainerBuilder<Container>()
             .Begin()
@@ -21,12 +21,12 @@ namespace TestContainers.Tests.ContainerTests
         public Task InitializeAsync() => _container.Start();
 
         public Task DisposeAsync() => _container.Stop();
-
     }
 
     public class GenericContainerTests : IClassFixture<GenericContainerFixture>
     {
-        readonly ContainerInspectResponse _containerInfo;
+        private readonly ContainerInspectResponse _containerInfo;
+
         public GenericContainerTests(GenericContainerFixture fixture) => _containerInfo = fixture.ContainerInfo;
 
         [Fact]
@@ -65,7 +65,7 @@ namespace TestContainers.Tests.ContainerTests
 
             var execCommand = new[]
             {
-                "/bin/sh",
+                "sh",
                 "-c",
                 "ls"
             };

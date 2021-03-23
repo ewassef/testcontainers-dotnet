@@ -16,9 +16,9 @@ namespace TestContainers.Core.Containers
         public string VirtualHost { get; set; } = "/";
         public IConnection Connection { get; private set; }
 
-        IConnectionFactory _connectionFactory;
+        private IConnectionFactory _connectionFactory;
 
-        IConnectionFactory ConnectionFactory =>
+        private IConnectionFactory ConnectionFactory =>
             _connectionFactory ?? (_connectionFactory = new ConnectionFactory
             {
                 HostName = GetDockerHostIpAddress(),
@@ -26,8 +26,7 @@ namespace TestContainers.Core.Containers
                 VirtualHost = VirtualHost,
                 UserName = UserName,
                 Password = Password,
-                Protocol = Protocols.DefaultProtocol,
-                RequestedHeartbeat = DefaultRequestedHeartbeatInSec
+                RequestedHeartbeat = TimeSpan.FromSeconds(DefaultRequestedHeartbeatInSec)
             });
 
         protected override async Task WaitUntilContainerStarted()

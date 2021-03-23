@@ -16,9 +16,9 @@ namespace TestContainers.Core.Containers
     {
         private const string TcpExposedPortFormat = "{0}/tcp";
 
-        static readonly UTF8Encoding Utf8EncodingWithoutBom = new UTF8Encoding(false);
-        readonly DockerClient _dockerClient;
-        string _containerId { get; set; }
+        private static readonly UTF8Encoding Utf8EncodingWithoutBom = new UTF8Encoding(false);
+        private readonly DockerClient _dockerClient;
+        private string _containerId { get; set; }
         public string DockerImageName { get; set; }
         public int[] ExposedPorts { get; set; }
         public (int ExposedPort, int PortBinding)[] PortBindings { get; set; }
@@ -37,7 +37,7 @@ namespace TestContainers.Core.Containers
             await TryStart();
         }
 
-        async Task TryStart()
+        private async Task TryStart()
         {
             var started = await _dockerClient.Containers.StartContainerAsync(_containerId, new ContainerStartParameters());
 
@@ -79,14 +79,13 @@ namespace TestContainers.Core.Containers
                 throw new ContainerLaunchException("Container startup failed", containerInspectPolicy.FinalException);
         }
 
-        async Task<string> Create()
+        private async Task<string> Create()
         {
             var progress = new Progress<JSONMessage>(async (m) =>
             {
                 Console.WriteLine(m.Status);
                 if (m.Error != null)
                     await Console.Error.WriteLineAsync(m.ErrorMessage);
-
             });
 
             var tag = DockerImageName.Split(':').Last();
@@ -98,7 +97,7 @@ namespace TestContainers.Core.Containers
 
             var images = await this._dockerClient.Images.ListImagesAsync(new ImagesListParameters { MatchName = DockerImageName });
 
-            if (!images.Any())
+            if (images.Any(x => x.RepoTags?.Any(t => t.Equals(DockerImageName)) == false))
             {
                 await this._dockerClient.Images.CreateImageAsync(imagesCreateParameters, new AuthConfig(), progress, CancellationToken.None);
             }
@@ -109,7 +108,7 @@ namespace TestContainers.Core.Containers
             return containerCreated.ID;
         }
 
-        CreateContainerParameters ApplyConfiguration()
+        private CreateContainerParameters ApplyConfiguration()
         {
             var exposedPorts = ExposedPorts?.ToList() ?? new List<int>();
 
@@ -157,7 +156,6 @@ namespace TestContainers.Core.Containers
             await _dockerClient.Containers.RemoveContainerAsync(ContainerInspectResponse.ID, new ContainerRemoveParameters());
         }
 
-
         public int GetMappedPort(int exposedPort)
         {
             if (ContainerInspectResponse == null)
@@ -180,16 +178,17 @@ namespace TestContainers.Core.Containers
 
         public async Task ExecuteCommand(params string[] command)
         {
-            var containerExecCreateParams = new ContainerExecCreateParameters
+            var containerExecCreateParams = ApplyConfiguration();
+            containerExecCreateParams.AttachStderr = true;
+            containerExecCreateParams.AttachStdout = true;
+            containerExecCreateParams.Cmd = command;
+
+            var start = new ContainerStartParameters()
             {
-                AttachStderr = true,
-                AttachStdout = true,
-                Cmd = command,
             };
+            var response = await _dockerClient.Containers.CreateContainerAsync(containerExecCreateParams);
 
-            var response = await _dockerClient.Containers.ExecCreateContainerAsync(_containerId, containerExecCreateParams);
-
-            await _dockerClient.Containers.StartContainerExecAsync(response.ID);
+            await _dockerClient.Containers.StartContainerAsync(response.ID, start);
         }
 
         public string GetDockerHostIpAddress()
@@ -202,11 +201,13 @@ namespace TestContainers.Core.Containers
                 case "https":
                 case "tcp":
                     return dockerHostUri.Host;
+
                 case "npipe": //will have to revisit this for LCOW/WCOW
                 case "unix":
                     return File.Exists("/.dockerenv")
                         ? ContainerInspectResponse.NetworkSettings.Gateway
                         : "localhost";
+
                 default:
                     return null;
             }
